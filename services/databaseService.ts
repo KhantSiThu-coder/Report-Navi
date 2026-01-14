@@ -4,10 +4,14 @@ import { User, Report, UserActivity } from '../types';
 
 /**
  * ONLINE DATABASE CONFIGURATION
+ * Using process.env ensures secrets aren't hardcoded in the source code.
+ * These should be set in your deployment platform's (Vercel/Firebase) dashboard.
  */
 const CLOUD_CONFIG = {
-  URL: 'https://bzahntkbtmdwuqazjbpr.supabase.co',
-  KEY: 'sb_publishable__IZeTrmjlrvC3fkEoFvcUA_NidZYOYE',
+  // We use fallbacks to your current values so it still works locally for you now,
+  // but prefers the environment variables once they are set in the cloud.
+  URL: process.env.SUPABASE_URL || 'https://bzahntkbtmdwuqazjbpr.supabase.co',
+  KEY: process.env.SUPABASE_KEY || 'sb_publishable__IZeTrmjlrvC3fkEoFvcUA_NidZYOYE',
   isEnabled: true 
 };
 
@@ -40,9 +44,14 @@ export const db = {
   // USER MANAGEMENT
   getUsers: async (): Promise<User[]> => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      const { data, error } = await supabase.from('users').select('*');
-      if (error) console.error("Cloud fetch error:", error);
-      return data || [];
+      try {
+        const { data, error } = await supabase.from('users').select('*');
+        if (error) throw error;
+        return data || [];
+      } catch (error) {
+        console.error("Cloud fetch error:", error);
+        return [];
+      }
     }
     const data = localStorage.getItem(USERS_KEY);
     return data ? JSON.parse(data) : [];
@@ -64,9 +73,14 @@ export const db = {
   // REPORTS
   getReports: async (): Promise<Report[]> => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      const { data, error } = await supabase.from('reports').select('*').order('date', { ascending: false });
-      if (error) console.error("Cloud fetch reports error:", error);
-      return data || [];
+      try {
+        const { data, error } = await supabase.from('reports').select('*').order('date', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      } catch (error) {
+        console.error("Cloud fetch reports error:", error);
+        return [];
+      }
     }
     const idb = await initIDB();
     return new Promise((resolve) => {
@@ -131,9 +145,14 @@ export const db = {
   // ACTIVITY LOGS
   getActivities: async (username: string): Promise<UserActivity[]> => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      const { data, error } = await supabase.from('activities').select('*').eq('username', username).order('date', { ascending: false });
-      if (error) console.error("Cloud fetch activities error:", error);
-      return data || [];
+      try {
+        const { data, error } = await supabase.from('activities').select('*').eq('username', username).order('date', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      } catch (error) {
+        console.error("Cloud fetch activities error:", error);
+        return [];
+      }
     }
     const idb = await initIDB();
     return new Promise((resolve) => {

@@ -119,7 +119,9 @@ const App: React.FC = () => {
                 authState.isAuthenticated ? <SubmitPage user={authState.user!} /> : <Navigate to="/login" />
               } />
               <Route path="/admin" element={
-                authState.isAuthenticated && authState.user?.role === UserRole.ADMIN ? <AdminPage /> : <Navigate to="/dashboard" />
+                authState.isAuthenticated && authState.user?.role === UserRole.ADMIN 
+                  ? <AdminPage currentUser={authState.user!} /> 
+                  : <Navigate to="/dashboard" />
               } />
             </Routes>
           </main>

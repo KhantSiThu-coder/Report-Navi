@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-// Added ReportStatus to the imported types to fix reference error
 import { User, Report, UserActivity, ReportStatus } from '../types';
 import { db } from '../services/databaseService';
 import { useTranslation } from '../context/LanguageContext';
+import { hashPassword } from '../services/cryptoService';
 
 interface ProfilePageProps {
   user: User;
@@ -17,6 +17,17 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
   const [userReports, setUserReports] = useState<Report[]>([]);
   const [activities, setActivities] = useState<UserActivity[]>([]);
   
+  // Password Management State
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    current: '',
+    new: '',
+    confirm: ''
+  });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -48,6 +59,55 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
       setIsUpdating(false);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+    
+    if (!passwordForm.new) {
+      setPasswordError(t('passwordEmpty'));
+      return;
+    }
+
+    if (passwordForm.new !== passwordForm.confirm) {
+      setPasswordError(t('passwordsDoNotMatch'));
+      return;
+    }
+
+    setIsPasswordLoading(true);
+    try {
+      // Verify current password
+      const currentHashed = await hashPassword(passwordForm.current, user.username);
+      if (currentHashed !== user.passwordHash) {
+        setPasswordError(t('incorrectPassword'));
+        setIsPasswordLoading(false);
+        return;
+      }
+
+      // Hash and update
+      const newHashed = await hashPassword(passwordForm.new, user.username);
+      const updatedUser = { ...user, passwordHash: newHashed };
+      
+      onUpdateUser(updatedUser);
+      setPasswordSuccess(t('passwordUpdateSuccess'));
+      
+      // Clear form
+      setPasswordForm({ current: '', new: '', confirm: '' });
+      
+      // Close modal after delay
+      setTimeout(() => {
+        setIsChangingPassword(false);
+        setPasswordSuccess('');
+      }, 2000);
+
+    } catch (err) {
+      console.error(err);
+      setPasswordError('Internal encryption error.');
+    } finally {
+      setIsPasswordLoading(false);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -151,7 +211,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
               {t('activityHistory')}
             </h3>
             
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
               {activities.length === 0 ? (
                 <p className="text-gray-500 py-4 text-center font-bold">{t('noActivity')}</p>
               ) : (
@@ -186,14 +246,110 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
               {t('securitySettings')}
             </h3>
             <div className="grid md:grid-cols-2 gap-6">
-              <button className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors group text-left">
-                <span className="font-bold">{t('changePassword')}</span>
+              <button 
+                onClick={() => setIsChangingPassword(true)}
+                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors group text-left border border-transparent hover:border-primary-100"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 group-hover:text-primary-600 transition-colors">
+                    <i className="fa-solid fa-key"></i>
+                  </div>
+                  <span className="font-bold">{t('changePassword')}</span>
+                </div>
                 <i className="fa-solid fa-chevron-right text-gray-300 group-hover:text-primary-500 transition-colors"></i>
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Password Change Modal */}
+      {isChangingPassword && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300"
+            onClick={() => {
+              if (!isPasswordLoading) setIsChangingPassword(false);
+            }}
+          ></div>
+          <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in duration-300">
+            <div className="bg-primary-600 p-6 text-white text-center">
+              <h3 className="text-2xl font-black">{t('changePassword')}</h3>
+            </div>
+            
+            <form onSubmit={handlePasswordChange} className="p-8 space-y-4">
+              {passwordError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-xl text-xs font-bold border border-red-100 dark:border-red-900/30 flex items-center gap-2 animate-in shake duration-300">
+                  <i className="fa-solid fa-triangle-exclamation"></i>
+                  {passwordError}
+                </div>
+              )}
+              
+              {passwordSuccess && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 rounded-xl text-xs font-bold border border-green-100 dark:border-green-900/30 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+                  <i className="fa-solid fa-circle-check"></i>
+                  {passwordSuccess}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t('currentPassword')}</label>
+                <input 
+                  type="password"
+                  required
+                  value={passwordForm.current}
+                  onChange={(e) => setPasswordForm(prev => ({ ...prev, current: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none font-bold transition-all"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t('newPassword')}</label>
+                <input 
+                  type="password"
+                  required
+                  value={passwordForm.new}
+                  onChange={(e) => setPasswordForm(prev => ({ ...prev, new: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none font-bold transition-all"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t('confirmNewPassword')}</label>
+                <input 
+                  type="password"
+                  required
+                  value={passwordForm.confirm}
+                  onChange={(e) => setPasswordForm(prev => ({ ...prev, confirm: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none font-bold transition-all"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button 
+                  type="button"
+                  onClick={() => setIsChangingPassword(false)}
+                  disabled={isPasswordLoading}
+                  className="flex-1 px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 font-black text-xs uppercase tracking-widest transition-all active:scale-95"
+                >
+                  {t('cancel')}
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isPasswordLoading}
+                  className="flex-1 px-4 py-3 rounded-xl bg-primary-600 text-white font-black text-xs uppercase tracking-widest shadow-lg shadow-primary-500/30 transition-all active:scale-95 flex items-center justify-center"
+                >
+                  {isPasswordLoading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    t('updatePassword')
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

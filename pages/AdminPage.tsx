@@ -1,10 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { Report, ReportStatus } from '../types';
+import { User, Report, ReportStatus } from '../types';
 import { db } from '../services/databaseService';
 import { useTranslation } from '../context/LanguageContext';
 
-const AdminPage: React.FC = () => {
+interface AdminPageProps {
+  currentUser: User;
+}
+
+const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
   const { t } = useTranslation();
   const [reports, setReports] = useState<Report[]>([]);
   const [stats, setStats] = useState({ pending: 0, verified: 0 });
@@ -36,9 +40,15 @@ const AdminPage: React.FC = () => {
     }
   };
 
-  const handleStatusUpdate = async (reportId: string, username: string, newStatus: ReportStatus) => {
+  const handleStatusUpdate = async (reportId: string, reporterUsername: string, newStatus: ReportStatus) => {
     const report = reports.find(r => r.id === reportId);
     if (!report) return;
+
+    // Security check: Admins cannot verify their own reports
+    if (report.user === currentUser.username) {
+      alert("System Integrity Alert: You cannot verify or update your own reports.");
+      return;
+    }
 
     await db.updateReport(reportId, { status: newStatus });
     
@@ -46,7 +56,7 @@ const AdminPage: React.FC = () => {
     if (newStatus === ReportStatus.VERIFIED) {
       pts = 50;
       const users = await db.getUsers();
-      const user = users.find(u => u.username === username);
+      const user = users.find(u => u.username === reporterUsername);
       if (user) {
         user.points += pts; 
         await db.saveUser(user);
@@ -59,7 +69,7 @@ const AdminPage: React.FC = () => {
 
     await db.addActivity({
       id: Date.now().toString() + Math.random(),
-      username: username,
+      username: reporterUsername,
       type: type,
       targetTitle: report.title,
       pointsChange: pts,
@@ -120,7 +130,12 @@ const AdminPage: React.FC = () => {
                   reports.map(report => (
                     <tr key={report.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="font-black text-primary-600">{report.user}</div>
+                        <div className="font-black text-primary-600 flex items-center gap-2">
+                          {report.user}
+                          {report.user === currentUser.username && (
+                            <span className="text-[9px] bg-primary-100 text-primary-600 px-1.5 py-0.5 rounded-md font-black uppercase">You</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="font-bold">{report.title}</div>
@@ -139,7 +154,13 @@ const AdminPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end h-10 min-w-[200px]">
-                          {confirmingAction?.reportId === report.id ? (
+                          {/* INTEGRITY CHECK: Hide action buttons for self-submitted reports */}
+                          {report.user === currentUser.username ? (
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 italic">
+                              <i className="fa-solid fa-user-shield"></i>
+                              {t('selfSubmitted')}
+                            </div>
+                          ) : confirmingAction?.reportId === report.id ? (
                             <div className="flex items-center gap-2 animate-in slide-in-from-right-2 duration-300">
                               <span className="text-[10px] font-black uppercase tracking-widest text-red-500 animate-pulse">{t('areYouSure')}</span>
                               <button 

@@ -4,15 +4,14 @@ import { User, Report, UserActivity } from '../types';
 
 /**
  * ONLINE DATABASE CONFIGURATION
- * Using process.env ensures secrets aren't hardcoded in the source code.
- * These should be set in your deployment platform's (Vercel/Firebase) dashboard.
+ * Strictly using environment variables for production security.
+ * Ensure SUPABASE_URL and SUPABASE_KEY are set in your Vercel/Hosting dashboard.
  */
 const CLOUD_CONFIG = {
-  // We use fallbacks to your current values so it still works locally for you now,
-  // but prefers the environment variables once they are set in the cloud.
-  URL: process.env.SUPABASE_URL || 'https://bzahntkbtmdwuqazjbpr.supabase.co',
-  KEY: process.env.SUPABASE_KEY || 'sb_publishable__IZeTrmjlrvC3fkEoFvcUA_NidZYOYE',
-  isEnabled: true 
+  URL: process.env.SUPABASE_URL || '',
+  KEY: process.env.SUPABASE_KEY || '',
+  // Only enable if both credentials are provided
+  isEnabled: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY)
 };
 
 // Initialize Supabase client
@@ -39,6 +38,7 @@ const initIDB = (): Promise<IDBDatabase> => {
 };
 
 export const db = {
+  // Helpful for the UI to know if we are in cloud mode or local fallback mode
   isOnline: () => CLOUD_CONFIG.isEnabled,
 
   // USER MANAGEMENT
@@ -50,7 +50,7 @@ export const db = {
         return data || [];
       } catch (error) {
         console.error("Cloud fetch error:", error);
-        return [];
+        // Fallback to local if cloud fails
       }
     }
     const data = localStorage.getItem(USERS_KEY);
@@ -79,7 +79,6 @@ export const db = {
         return data || [];
       } catch (error) {
         console.error("Cloud fetch reports error:", error);
-        return [];
       }
     }
     const idb = await initIDB();
@@ -151,7 +150,6 @@ export const db = {
         return data || [];
       } catch (error) {
         console.error("Cloud fetch activities error:", error);
-        return [];
       }
     }
     const idb = await initIDB();

@@ -53,7 +53,7 @@ export const translations = {
     yourProfile: 'Your Profile',
     activityHistory: 'Activity History',
     securitySettings: 'Security Settings',
-    changePassword: 'Password Management',
+    changePassword: 'Change Password',
     noReportsFound: 'No Reports Found',
     beFirstReport: 'Be the first to report an issue in your area!',
     status: 'Status',
@@ -90,7 +90,17 @@ export const translations = {
     act_verify: 'Report Verified',
     act_delete: 'Report Deleted',
     act_resolve: 'Report Resolved',
-    act_decline: 'Report Declined'
+    act_decline: 'Report Declined',
+    selfSubmitted: 'Self-submitted (Review required by others)',
+    currentPassword: 'Current Password',
+    newPassword: 'New Password',
+    confirmNewPassword: 'Confirm New Password',
+    updatePassword: 'Update Password',
+    cancel: 'Cancel',
+    passwordUpdateSuccess: 'Password updated successfully!',
+    incorrectPassword: 'Incorrect current password.',
+    passwordsDoNotMatch: 'New passwords do not match.',
+    passwordEmpty: 'Password cannot be empty.'
   },
   jp: {
     home: 'ホーム',
@@ -143,7 +153,7 @@ export const translations = {
     yourProfile: 'プロフィール',
     activityHistory: '活動履歴',
     securitySettings: 'セキュリティ設定',
-    changePassword: 'パスワード管理',
+    changePassword: 'パスワード変更',
     noReportsFound: '報告が見つかりませんでした',
     beFirstReport: 'あなたの地域の最初の報告者になりましょう！',
     status: 'ステータス',
@@ -180,7 +190,17 @@ export const translations = {
     act_verify: '報告確認済み',
     act_delete: '報告削除済み',
     act_resolve: '報告解決済み',
-    act_decline: '報告却下済み'
+    act_decline: '報告却下済み',
+    selfSubmitted: '自己提出済み（他者による審査が必要）',
+    currentPassword: '現在のパスワード',
+    newPassword: '新しいパスワード',
+    confirmNewPassword: '新しいパスワード（確認）',
+    updatePassword: 'パスワードを更新',
+    cancel: 'キャンセル',
+    passwordUpdateSuccess: 'パスワードが正常に更新されました！',
+    incorrectPassword: '現在のパスワードが正しくありません。',
+    passwordsDoNotMatch: '新しいパスワードが一致しません。',
+    passwordEmpty: 'パスワードを入力してください。'
   }
 };
 

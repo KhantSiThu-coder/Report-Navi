@@ -185,11 +185,15 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
                             </div>
                           ) : confirmingAction?.reportId === report.id ? (
                             <div className="flex items-center gap-2 animate-in slide-in-from-right-2 duration-300">
-                              <span className="text-[10px] font-black uppercase tracking-widest text-red-500 animate-pulse">{t('areYouSure')}</span>
+                              <span className={`text-[10px] font-black uppercase tracking-widest animate-pulse ${confirmingAction.type === 'decline' ? 'text-red-500' : 'text-green-500'}`}>
+                                {t('areYouSure')}
+                              </span>
                               <button 
                                 onClick={() => handleStatusUpdate(report.id, report.user, confirmingAction.status)}
                                 className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl shadow-lg transition-all active:scale-90 ${
-                                  confirmingAction.type === 'decline' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+                                  confirmingAction.type === 'decline' ? 'bg-red-600 text-white' : 
+                                  confirmingAction.type === 'verify' ? 'bg-green-600 text-white' :
+                                  'bg-primary-600 text-white'
                                 }`}
                               >
                                 {t('yes')}
@@ -274,32 +278,57 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
                     <h4 className="font-black text-primary-800 dark:text-primary-300">Admin Actions Required</h4>
                     <p className="text-xs text-primary-600 dark:text-primary-400 font-bold">Review evidence and verify report validity.</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {selectedReport.status === ReportStatus.PENDING && (
-                      <>
-                        <button 
-                          onClick={() => handleStatusUpdate(selectedReport.id, selectedReport.user, ReportStatus.VERIFIED)}
-                          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95"
-                        >
-                          {t('verify')}
-                        </button>
-                        <button 
-                          onClick={() => handleStatusUpdate(selectedReport.id, selectedReport.user, ReportStatus.DECLINED)}
-                          className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95"
-                        >
-                          {t('decline')}
-                        </button>
-                      </>
-                    )}
-                    {selectedReport.status === ReportStatus.VERIFIED && (
+                  
+                  {confirmingAction?.reportId === selectedReport.id ? (
+                    <div className="flex items-center gap-3 animate-in slide-in-from-right-4 duration-300">
+                      <span className={`font-black uppercase tracking-widest text-sm animate-pulse ${confirmingAction.type === 'decline' ? 'text-red-500' : 'text-green-500'}`}>
+                        {t('areYouSure')}
+                      </span>
                       <button 
-                        onClick={() => handleStatusUpdate(selectedReport.id, selectedReport.user, ReportStatus.RESOLVED)}
-                        className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95"
+                        onClick={() => handleStatusUpdate(selectedReport.id, selectedReport.user, confirmingAction.status)}
+                        className={`px-8 py-3 rounded-2xl font-black text-sm shadow-xl transition-all active:scale-95 ${
+                          confirmingAction.type === 'decline' ? 'bg-red-600 text-white' : 
+                          confirmingAction.type === 'verify' ? 'bg-green-600 text-white' :
+                          'bg-primary-600 text-white'
+                        }`}
                       >
-                        {t('markResolved')}
+                        {t('yes')}
                       </button>
-                    )}
-                  </div>
+                      <button 
+                        onClick={() => setConfirmingAction(null)}
+                        className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-8 py-3 rounded-2xl font-black text-sm shadow-md transition-all active:scale-95"
+                      >
+                        {t('no')}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      {selectedReport.status === ReportStatus.PENDING && (
+                        <>
+                          <button 
+                            onClick={() => setConfirmingAction({ reportId: selectedReport.id, status: ReportStatus.VERIFIED, type: 'verify' })}
+                            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95"
+                          >
+                            {t('verify')}
+                          </button>
+                          <button 
+                            onClick={() => setConfirmingAction({ reportId: selectedReport.id, status: ReportStatus.DECLINED, type: 'decline' })}
+                            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95"
+                          >
+                            {t('decline')}
+                          </button>
+                        </>
+                      )}
+                      {selectedReport.status === ReportStatus.VERIFIED && (
+                        <button 
+                          onClick={() => setConfirmingAction({ reportId: selectedReport.id, status: ReportStatus.RESOLVED, type: 'resolve' })}
+                          className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95"
+                        >
+                          {t('markResolved')}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

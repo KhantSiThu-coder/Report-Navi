@@ -2,6 +2,7 @@
   "name": "Report Navi",
   "description": "A secure, community-driven platform for reporting infrastructure issues, earning rewards, and improving your city with encrypted authentication and persistent storage.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "geolocation"
   ]
 }

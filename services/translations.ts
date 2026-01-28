@@ -100,7 +100,11 @@ export const translations = {
     passwordUpdateSuccess: 'Password updated successfully!',
     incorrectPassword: 'Incorrect current password.',
     passwordsDoNotMatch: 'New passwords do not match.',
-    passwordEmpty: 'Password cannot be empty.'
+    passwordEmpty: 'Password cannot be empty.',
+    currentLocation: 'Current Location',
+    confirmLocation: 'Are you sure to add the current location?',
+    locationError: 'Could not get your location. Please check permissions.',
+    fetchingLocation: 'Locating...'
   },
   jp: {
     home: 'ホーム',
@@ -200,7 +204,11 @@ export const translations = {
     passwordUpdateSuccess: 'パスワードが正常に更新されました！',
     incorrectPassword: '現在のパスワードが正しくありません。',
     passwordsDoNotMatch: '新しいパスワードが一致しません。',
-    passwordEmpty: 'パスワードを入力してください。'
+    passwordEmpty: 'パスワードを入力してください。',
+    currentLocation: '現在地',
+    confirmLocation: '現在地を追加してもよろしいですか？',
+    locationError: '現在地を取得できませんでした。権限を確認してください。',
+    fetchingLocation: '取得中...'
   }
 };
 

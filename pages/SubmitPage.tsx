@@ -18,6 +18,8 @@ const SubmitPage: React.FC<SubmitPageProps> = ({ user }) => {
   const [files, setFiles] = useState<ReportFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewingFile, setPreviewingFile] = useState<ReportFile | null>(null);
+  const [isConfirmingLocation, setIsConfirmingLocation] = useState(false);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const navigate = useNavigate();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,6 +44,32 @@ const SubmitPage: React.FC<SubmitPageProps> = ({ user }) => {
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const fetchCurrentLocation = () => {
+    setIsFetchingLocation(true);
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const mapLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
+          setLocation(mapLink);
+          setIsFetchingLocation(false);
+          setIsConfirmingLocation(false);
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+          alert(t('locationError'));
+          setIsFetchingLocation(false);
+          setIsConfirmingLocation(false);
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    } else {
+      alert("Geolocation is not supported by your browser.");
+      setIsFetchingLocation(false);
+      setIsConfirmingLocation(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -152,16 +180,36 @@ const SubmitPage: React.FC<SubmitPageProps> = ({ user }) => {
 
           <div className="space-y-2">
             <label className="text-sm font-black uppercase tracking-widest text-gray-400">{t('location')}</label>
-            <div className="relative">
-              <i className="fa-solid fa-map-pin absolute left-6 top-1/2 -translate-y-1/2 text-primary-500"></i>
-              <input 
-                type="text" 
-                required
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Address or Google Maps link"
-                className="w-full pl-14 pr-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none transition-all font-bold"
-              />
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-grow">
+                <i className="fa-solid fa-map-pin absolute left-6 top-1/2 -translate-y-1/2 text-primary-500"></i>
+                <input 
+                  type="text" 
+                  required
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Address or Google Maps link"
+                  className="w-full pl-14 pr-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none transition-all font-bold"
+                />
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsConfirmingLocation(true)}
+                disabled={isFetchingLocation}
+                className="bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 px-6 py-4 rounded-2xl font-black text-sm whitespace-nowrap hover:bg-primary-600 hover:text-white transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 border border-primary-100 dark:border-primary-800"
+              >
+                {isFetchingLocation ? (
+                   <>
+                    <div className="w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                    {t('fetchingLocation')}
+                   </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-location-crosshairs"></i>
+                    {t('currentLocation')}
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -243,6 +291,40 @@ const SubmitPage: React.FC<SubmitPageProps> = ({ user }) => {
           )}
         </button>
       </form>
+
+      {/* Location Confirmation Pop-up */}
+      {isConfirmingLocation && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-md animate-in fade-in duration-300"
+            onClick={() => !isFetchingLocation && setIsConfirmingLocation(false)}
+          ></div>
+          <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in duration-300 p-8 text-center">
+            <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 text-primary-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl">
+              <i className="fa-solid fa-location-dot"></i>
+            </div>
+            <h3 className="text-xl font-black mb-4 leading-tight">{t('confirmLocation')}</h3>
+            <div className="flex gap-4">
+              <button 
+                type="button"
+                onClick={fetchCurrentLocation}
+                disabled={isFetchingLocation}
+                className="flex-1 bg-primary-600 text-white py-3 rounded-xl font-black text-sm transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2"
+              >
+                {isFetchingLocation ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : t('yes')}
+              </button>
+              <button 
+                type="button"
+                onClick={() => setIsConfirmingLocation(false)}
+                disabled={isFetchingLocation}
+                className="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-3 rounded-xl font-black text-sm transition-all active:scale-95"
+              >
+                {t('no')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Media Preview Modal */}
       {previewingFile && (

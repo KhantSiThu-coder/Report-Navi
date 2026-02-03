@@ -17,10 +17,16 @@ const Footer: React.FC = () => {
             &copy; {new Date().getFullYear()} Report Navi Team. Building safer cities together.
           </p>
 
-          <div className="flex items-center gap-4">
-            <a href="#" className="text-gray-400 hover:text-primary-600 transition-colors"><i className="fa-brands fa-twitter"></i></a>
-            <a href="#" className="text-gray-400 hover:text-primary-600 transition-colors"><i className="fa-brands fa-facebook"></i></a>
-            <a href="#" className="text-gray-400 hover:text-primary-600 transition-colors"><i className="fa-brands fa-instagram"></i></a>
+          <div className="flex items-center">
+            <a 
+              href="https://click.ecc.ac.jp/ecc/khant_si_thu/portfolio/" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-gray-500 dark:text-gray-400 hover:text-primary-600 transition-all flex items-center gap-2 font-black text-sm group"
+            >
+              <i className="fa-solid fa-user-tie transition-transform group-hover:scale-110"></i>
+              <span>Portfolio</span>
+            </a>
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@ const Footer: React.FC = () => {
             &copy; {new Date().getFullYear()} Report Navi Team. Building safer cities together.
           </p>
 
-          <div className="flex items-center">
+          <div className="flex items-center gap-6">
             <a 
               href="https://click.ecc.ac.jp/ecc/khant_si_thu/portfolio/" 
               target="_blank" 
@@ -26,6 +26,15 @@ const Footer: React.FC = () => {
             >
               <i className="fa-solid fa-user-tie transition-transform group-hover:scale-110"></i>
               <span>Portfolio</span>
+            </a>
+            <a 
+              href="https://github.com/KhantSiThu-coder/Report-Navi" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-gray-500 dark:text-gray-400 hover:text-primary-600 transition-all flex items-center gap-2 font-black text-sm group"
+            >
+              <i className="fa-brands fa-github transition-transform group-hover:scale-110 text-base"></i>
+              <span>GitHub</span>
             </a>
           </div>
         </div>

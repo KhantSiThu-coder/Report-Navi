@@ -1,20 +1,23 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+企画概要
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/drive/1nZx76Pp2tuyByFFjAvJo9upJNJ7U4Wad
-
-## Run Locally
-
-**Prerequisites:**  Node.js
+市民が街の問題を簡単に報告でき、政府が迅速に
+解決できるようにするサービスです。
 
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+ターゲット詳細
+
+道路のこわれた場所やごみの放置などの問題を見つけても、
+どこに連絡すればいいかわからない人が多いです。
+電話で説明するのが苦手な人や、日本語で話すことに不安がある
+外国人もいるため、ウェブサイトで簡単に問題を報告できます。
+写真と簡単な文章で報告できるため、気軽に利用できます。
+市民が街を歩いているときや通勤・通学中など、「気づいたその瞬間」に
+使えるサービスです。
+
+
+発展性
+
+将来的には、ポイント交換システムの導入も予定しております。
+たとえば、貯まったポイントをコンビニエンスストアや
+飲食店などで利用できるようにすることで、
+市民の参加意欲を高め、地域経済の活性化にもつなげます。

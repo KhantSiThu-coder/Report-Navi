@@ -41,6 +41,20 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Real-time Sync Effect
+  useEffect(() => {
+    if (authState.isAuthenticated && authState.user && db.isOnline()) {
+      const subscription = db.subscribeToUser(authState.user.username, (updatedUser) => {
+        setAuthState(prev => ({ ...prev, user: updatedUser }));
+        sessionStorage.setItem('active_user', JSON.stringify(updatedUser));
+      });
+
+      return () => {
+        if (subscription) subscription.unsubscribe();
+      };
+    }
+  }, [authState.isAuthenticated, authState.user?.username]);
+
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');

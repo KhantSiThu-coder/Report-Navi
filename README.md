@@ -1,3 +1,20 @@
-国民向け市内や道路上で発生している問題を、政府が迅速に解決できるようにするためのサービスReport Navi (報告ナビ)を作成しました。
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-I have developed 'Report Navi', a service designed to enable the government to quickly resolve issues occurring within the city or on roads for the benefit of the public.
+# Run and deploy your AI Studio app
+
+This contains everything you need to run your app locally.
+
+View your app in AI Studio: https://ai.studio/apps/drive/1nZx76Pp2tuyByFFjAvJo9upJNJ7U4Wad
+
+## Run Locally
+
+**Prerequisites:**  Node.js
+
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

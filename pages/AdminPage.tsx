@@ -45,25 +45,22 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
     const report = reports.find(r => r.id === reportId);
     if (!report) return;
 
-    // Security check: Admins cannot verify their own reports
     if (report.user === currentUser.username) {
       alert("System Integrity Alert: You cannot verify or update your own reports.");
       return;
     }
 
+    // 1. Update Report Status
     await db.updateReport(reportId, { status: newStatus });
     
+    // 2. Award Points (Direct and Fast)
     let pts = 0;
     if (newStatus === ReportStatus.VERIFIED) {
       pts = 50;
-      const users = await db.getUsers();
-      const user = users.find(u => u.username === reporterUsername);
-      if (user) {
-        user.points += pts; 
-        await db.saveUser(user);
-      }
+      await db.updateUserPoints(reporterUsername, pts);
     }
 
+    // 3. Log Activity
     let type: 'verify' | 'resolve' | 'decline' = 'verify';
     if (newStatus === ReportStatus.RESOLVED) type = 'resolve';
     if (newStatus === ReportStatus.DECLINED) type = 'decline';
@@ -78,7 +75,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
     });
 
     setConfirmingAction(null);
-    setSelectedReport(null); // Close modal if open
+    setSelectedReport(null);
     fetchData();
   };
 
@@ -244,7 +241,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
         </div>
       </div>
 
-      {/* Admin Detailed Report Modal */}
       {selectedReport && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div 
@@ -271,7 +267,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
             </div>
 
             <div className="flex-grow overflow-y-auto p-6 sm:p-10 space-y-10 custom-scrollbar">
-              {/* Action Bar for Admin inside Modal */}
               {selectedReport.user !== currentUser.username && (
                 <div className="p-6 bg-primary-50 dark:bg-primary-900/10 rounded-3xl border-2 border-primary-200 dark:border-primary-800/50 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-center sm:text-left">

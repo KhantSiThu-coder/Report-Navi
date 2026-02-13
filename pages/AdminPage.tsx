@@ -425,5 +425,3 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
 };
 
 export default AdminPage;
-
-

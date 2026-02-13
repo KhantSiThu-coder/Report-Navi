@@ -26,7 +26,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
   useEffect(() => {
     fetchData();
 
-    // High speed Postgres CDC subscription
+    // High speed Postgres CDC subscription - Updates specific rows in state instantly
     const channel = db.subscribeToReports(
       (newReport) => setReports(prev => [newReport, ...prev]),
       (updatedReport) => {
@@ -94,7 +94,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
       });
     } catch (err) {
       console.error("Update failed:", err);
-      fetchData(); // Sync on failure
+      fetchData(); // Re-sync state on failure
     }
 
     setConfirmingAction(null);
@@ -129,7 +129,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
           db.isOnline() ? 'bg-green-50 text-green-600 border-green-100' : 'bg-amber-50 text-amber-600 border-amber-100'
         }`}>
           <div className={`w-2 h-2 rounded-full animate-pulse ${db.isOnline() ? 'bg-green-500' : 'bg-amber-500'}`}></div>
-          {db.isOnline() ? 'DIRECT POSTGRES LISTEN ACTIVE' : 'LOCAL MODE'}
+          {db.isOnline() ? 'DIRECT CLOUD SYNC ACTIVE' : 'LOCAL MODE'}
         </div>
       </div>
 
@@ -147,7 +147,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
       <div className="bg-white dark:bg-gray-800 rounded-[3rem] shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700">
         <div className="overflow-x-auto">
           {isLoading && reports.length === 0 ? (
-             <div className="p-24 text-center font-black text-gray-400 uppercase tracking-widest text-xs animate-pulse">Syncing Cloud State...</div>
+             <div className="p-24 text-center font-black text-gray-400 uppercase tracking-widest text-xs animate-pulse">Syncing Database Node...</div>
           ) : (
             <table className="w-full text-left">
               <thead>
@@ -168,18 +168,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
                     <tr 
                       key={report.id} 
                       onClick={() => setSelectedReport(report)}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer group"
                     >
                       <td className="px-8 py-5">
                         <div className="font-black text-primary-600 flex items-center gap-2">
                           {report.user}
                           {report.user === currentUser.username && (
-                            <span className="text-[9px] bg-primary-100 text-primary-600 px-1.5 py-0.5 rounded-md font-black uppercase">You</span>
+                            <span className="text-[9px] bg-primary-100 text-primary-600 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter">You</span>
                           )}
                         </div>
                       </td>
                       <td className="px-8 py-5">
-                        <div className="font-black text-gray-900 dark:text-white">{report.title}</div>
+                        <div className="font-black text-gray-900 dark:text-white group-hover:text-primary-600 transition-colors">{report.title}</div>
                         <div className="text-[10px] text-gray-400 font-bold uppercase">{t(report.category.toLowerCase() as any) || report.category}</div>
                       </td>
                       <td className="px-8 py-5">
@@ -192,9 +192,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
                         </span>
                       </td>
                       <td className="px-8 py-5 text-right">
-                        <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                           {report.user !== currentUser.username && report.status === ReportStatus.PENDING && (
-                            <div className="flex gap-2">
+                            <>
                               <button 
                                 onClick={() => setConfirmingAction({ reportId: report.id, reporterUsername: report.user, status: ReportStatus.VERIFIED, type: 'verify' })}
                                 className="bg-green-600 hover:bg-green-700 text-white text-[9px] font-black uppercase px-4 py-2 rounded-xl shadow-md active:scale-95 transition-all"
@@ -207,7 +207,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
                               >
                                 {t('decline')}
                               </button>
-                            </div>
+                            </>
                           )}
                           {report.status === ReportStatus.VERIFIED && (
                             <button 
@@ -217,6 +217,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
                               {t('markResolved')}
                             </button>
                           )}
+                          <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 group-hover:bg-primary-600 group-hover:text-white transition-all ml-2">
+                             <i className="fa-solid fa-chevron-right text-[10px]"></i>
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -228,7 +231,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
         </div>
       </div>
 
-      {/* Admin Detailed Report Modal */}
+      {/* ADMIN DETAIL MODAL */}
       {selectedReport && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div 
@@ -238,43 +241,41 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
           <div className="bg-white dark:bg-gray-800 w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden flex flex-col animate-in zoom-in duration-300 border border-gray-100 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 p-6 sm:p-8 flex items-center justify-between border-b border-gray-100 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md z-20">
               <div>
-                <span className="bg-primary-600 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg mb-2 inline-block text-white">
+                <span className="bg-primary-600 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg mb-2 inline-block text-white shadow-lg">
                   {t(selectedReport.category.toLowerCase() as any) || selectedReport.category}
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-black">{selectedReport.title}</h2>
               </div>
-              <div className="flex items-center gap-3">
-                <button 
-                  type="button"
-                  onClick={() => setSelectedReport(null)}
-                  className="w-12 h-12 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-2xl flex items-center justify-center transition-all"
-                >
-                  <i className="fa-solid fa-xmark text-xl"></i>
-                </button>
-              </div>
+              <button 
+                type="button"
+                onClick={() => setSelectedReport(null)}
+                className="w-12 h-12 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-2xl flex items-center justify-center transition-all shadow-sm active:scale-95"
+              >
+                <i className="fa-solid fa-xmark text-xl"></i>
+              </button>
             </div>
 
             <div className="flex-grow overflow-y-auto p-6 sm:p-10 space-y-10 custom-scrollbar">
-              {/* Admin Actions Bar in Modal */}
+              {/* Review Actions Inside Modal */}
               {selectedReport.user !== currentUser.username && (
-                <div className="p-6 bg-primary-50 dark:bg-primary-900/10 rounded-3xl border border-primary-200 dark:border-primary-800/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="p-6 bg-primary-50 dark:bg-primary-900/10 rounded-3xl border border-primary-200 dark:border-primary-800/30 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-sm">
                   <div className="text-center sm:text-left">
-                    <h4 className="font-black text-primary-800 dark:text-primary-300">Review Required</h4>
-                    <p className="text-xs text-primary-600 dark:text-primary-400 font-bold uppercase tracking-widest">Verify the evidence and update status</p>
+                    <h4 className="font-black text-primary-800 dark:text-primary-300 text-lg">Report Verification</h4>
+                    <p className="text-xs text-primary-600 dark:text-primary-400 font-bold uppercase tracking-widest">Perform admin oversight after evidence review</p>
                   </div>
                   
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     {selectedReport.status === ReportStatus.PENDING && (
                       <>
                         <button 
                           onClick={() => setConfirmingAction({ reportId: selectedReport.id, reporterUsername: selectedReport.user, status: ReportStatus.VERIFIED, type: 'verify' })}
-                          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-2xl font-black text-sm shadow-lg transition-all active:scale-95"
+                          className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-xl shadow-green-600/20 transition-all active:scale-95"
                         >
                           {t('verify')}
                         </button>
                         <button 
                           onClick={() => setConfirmingAction({ reportId: selectedReport.id, reporterUsername: selectedReport.user, status: ReportStatus.DECLINED, type: 'decline' })}
-                          className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-2xl font-black text-sm shadow-lg transition-all active:scale-95"
+                          className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-xl shadow-red-600/20 transition-all active:scale-95"
                         >
                           {t('decline')}
                         </button>
@@ -283,7 +284,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
                     {selectedReport.status === ReportStatus.VERIFIED && (
                       <button 
                         onClick={() => setConfirmingAction({ reportId: selectedReport.id, reporterUsername: selectedReport.user, status: ReportStatus.RESOLVED, type: 'resolve' })}
-                        className="bg-primary-600 hover:bg-primary-700 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-lg transition-all active:scale-95"
+                        className="bg-primary-600 hover:bg-primary-700 text-white px-10 py-3 rounded-2xl font-black text-sm shadow-xl shadow-primary-600/20 transition-all active:scale-95"
                       >
                         {t('markResolved')}
                       </button>
@@ -299,50 +300,50 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
                 <div className="flex flex-col gap-8">
                   {selectedReport.files && selectedReport.files.length > 0 ? (
                     selectedReport.files.map((file, i) => (
-                      <div key={i} className="bg-gray-50 dark:bg-gray-900 rounded-3xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-700 p-2">
+                      <div key={i} className="bg-gray-50 dark:bg-gray-900 rounded-[2rem] overflow-hidden shadow-md border border-gray-100 dark:border-gray-700 p-2">
                          {file.type.startsWith('video') ? (
-                           <video src={file.url} controls className="w-full h-auto max-h-[80vh] rounded-2xl shadow-inner bg-black" />
+                           <video src={file.url} controls className="w-full h-auto max-h-[80vh] rounded-[1.5rem] shadow-inner bg-black" />
                          ) : (
-                           <img src={file.url} className="w-full h-auto max-h-[80vh] object-contain rounded-2xl shadow-inner bg-black/5" alt={`Evidence ${i}`} />
+                           <img src={file.url} className="w-full h-auto max-h-[80vh] object-contain rounded-[1.5rem] shadow-inner bg-black/5" alt={`Evidence ${i}`} />
                          )}
                       </div>
                     ))
                   ) : (
-                    <div className="bg-gray-50 dark:bg-gray-900 rounded-3xl p-10 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
-                      <i className="fa-solid fa-image text-4xl mb-3"></i>
-                      <p className="font-black">No Media Available</p>
+                    <div className="bg-gray-50 dark:bg-gray-900 rounded-3xl p-16 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
+                      <i className="fa-solid fa-image text-5xl mb-4 opacity-20"></i>
+                      <p className="font-black uppercase tracking-widest text-xs">No Visual Evidence Provided</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-8">
-                 <div className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-10 pb-10">
+                 <div className="space-y-8">
                     <div>
-                      <h4 className="font-black text-gray-400 uppercase tracking-widest text-xs mb-3 flex items-center gap-2">
-                        <i className="fa-solid fa-align-left"></i> {t('description')}
+                      <h4 className="font-black text-gray-400 uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                        <i className="fa-solid fa-align-left text-primary-500"></i> {t('description')}
                       </h4>
-                      <p className="text-gray-600 dark:text-gray-300 leading-relaxed font-bold text-lg">
+                      <p className="text-gray-700 dark:text-gray-200 leading-relaxed font-bold text-xl whitespace-pre-wrap">
                         {selectedReport.description}
                       </p>
                     </div>
                     
                     <div>
-                      <h4 className="font-black text-gray-400 uppercase tracking-widest text-xs mb-3 flex items-center gap-2">
-                        <i className="fa-solid fa-location-arrow"></i> {t('location')}
+                      <h4 className="font-black text-gray-400 uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                        <i className="fa-solid fa-location-arrow text-primary-500"></i> {t('location')}
                       </h4>
                       {isUrl(selectedReport.location) ? (
                         <a 
                           href={selectedReport.location} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-6 py-3 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 font-black text-lg rounded-2xl hover:bg-primary-600 hover:text-white transition-all shadow-sm break-all"
+                          className="inline-flex items-center gap-3 px-8 py-4 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 font-black text-lg rounded-2xl hover:bg-primary-600 hover:text-white transition-all shadow-sm break-all group"
                         >
-                          <i className="fa-solid fa-map-location-dot"></i>
-                          Open in Google Maps
+                          <i className="fa-solid fa-map-location-dot group-hover:scale-110 transition-transform"></i>
+                          View Detailed Coordinates
                         </a>
                       ) : (
-                        <p className="text-gray-600 dark:text-gray-300 font-black text-lg">
+                        <p className="text-gray-700 dark:text-gray-200 font-black text-xl">
                           {selectedReport.location}
                         </p>
                       )}
@@ -350,27 +351,31 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
                  </div>
 
                  <div className="space-y-4">
-                    <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-3xl flex justify-between items-center border border-gray-100 dark:border-gray-700">
+                    <div className="p-8 bg-gray-50 dark:bg-gray-900 rounded-[2rem] flex justify-between items-center border border-gray-100 dark:border-gray-700 shadow-inner">
                       <div>
                         <div className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">{t('status')}</div>
-                        <div className={`font-black text-xl ${
+                        <div className={`font-black text-2xl ${
                           selectedReport.status === ReportStatus.PENDING ? 'text-amber-500' :
                           selectedReport.status === ReportStatus.VERIFIED ? 'text-blue-500' :
                           'text-green-500'
                         }`}>{selectedReport.status}</div>
                       </div>
-                      <i className="fa-solid fa-circle-notch text-3xl opacity-20"></i>
+                      <div className="w-12 h-12 rounded-2xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
+                        <i className="fa-solid fa-shield-halved text-primary-500 opacity-40"></i>
+                      </div>
                     </div>
                     
-                    <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-700">
+                    <div className="p-8 bg-gray-50 dark:bg-gray-900 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-inner">
                       <div className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">{t('date')}</div>
-                      <div className="font-black text-xl">{formatDate(selectedReport.date)}</div>
+                      <div className="font-black text-2xl">{formatDate(selectedReport.date)}</div>
                     </div>
 
-                    <div className="p-6 bg-primary-50 dark:bg-primary-900/10 rounded-3xl border border-primary-100 dark:border-primary-900/20">
+                    <div className="p-8 bg-primary-50 dark:bg-primary-900/10 rounded-[2rem] border border-primary-100 dark:border-primary-900/20 shadow-sm">
                       <div className="text-primary-600 dark:text-primary-400 text-[10px] font-black uppercase tracking-widest mb-1">Reporter</div>
-                      <div className="font-black text-xl flex items-center gap-2">
-                        <i className="fa-solid fa-user-circle"></i>
+                      <div className="font-black text-2xl flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-primary-600 text-white flex items-center justify-center text-sm">
+                          {selectedReport.user.charAt(0).toUpperCase()}
+                        </div>
                         {selectedReport.user}
                       </div>
                     </div>
@@ -381,51 +386,51 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
         </div>
       )}
 
-      {/* YES / NO Confirmation Popup Modal */}
+      {/* YES / NO CONFIRMATION OVERLAY */}
       {confirmingAction && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div 
             className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
             onClick={() => setConfirmingAction(null)}
           ></div>
-          <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in duration-300 border border-gray-100 dark:border-gray-700">
-            <div className={`p-8 text-white text-center ${
+          <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[3rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in duration-300 border border-gray-100 dark:border-gray-700">
+            <div className={`p-10 text-white text-center ${
               confirmingAction.type === 'verify' ? 'bg-green-600' : 
               confirmingAction.type === 'decline' ? 'bg-red-600' : 
               'bg-primary-600'
             }`}>
-              <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 backdrop-blur-md">
+              <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6 backdrop-blur-md shadow-lg">
                 <i className={`fa-solid ${
-                  confirmingAction.type === 'verify' ? 'fa-check-circle' : 
-                  confirmingAction.type === 'decline' ? 'fa-times-circle' : 
+                  confirmingAction.type === 'verify' ? 'fa-check-double' : 
+                  confirmingAction.type === 'decline' ? 'fa-circle-xmark' : 
                   'fa-circle-check'
                 }`}></i>
               </div>
-              <h3 className="text-2xl font-black">{t('areYouSure')}</h3>
-              <p className="text-white/80 font-bold text-xs uppercase tracking-widest mt-2">
-                Action: {confirmingAction.type.toUpperCase()}
+              <h3 className="text-2xl font-black mb-1">{t('areYouSure')}</h3>
+              <p className="text-white/70 font-black text-[10px] uppercase tracking-[0.2em]">
+                Confirm: {confirmingAction.type} status
               </p>
             </div>
             
-            <div className="p-8 space-y-4">
-              <p className="text-center text-gray-500 dark:text-gray-400 font-bold">
-                This action will update the report status and notify the user.
+            <div className="p-10 space-y-6">
+              <p className="text-center text-gray-500 dark:text-gray-400 font-bold leading-relaxed">
+                Updating this report will sync across the community dashboard and award points to the reporter.
               </p>
               
               <div className="flex gap-4">
                 <button 
                   onClick={executeStatusUpdate}
                   className={`flex-1 py-4 rounded-2xl text-white font-black text-sm transition-all active:scale-95 shadow-xl ${
-                    confirmingAction.type === 'verify' ? 'bg-green-600 shadow-green-500/20' : 
-                    confirmingAction.type === 'decline' ? 'bg-red-600 shadow-red-500/20' : 
-                    'bg-primary-600 shadow-primary-500/20'
+                    confirmingAction.type === 'verify' ? 'bg-green-600 shadow-green-500/30' : 
+                    confirmingAction.type === 'decline' ? 'bg-red-600 shadow-red-500/30' : 
+                    'bg-primary-600 shadow-primary-500/30'
                   }`}
                 >
                   {t('yes')}
                 </button>
                 <button 
                   onClick={() => setConfirmingAction(null)}
-                  className="flex-1 py-4 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-black text-sm transition-all active:scale-95"
+                  className="flex-1 py-4 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-black text-sm transition-all active:scale-95 hover:bg-gray-200 dark:hover:bg-gray-600"
                 >
                   {t('no')}
                 </button>

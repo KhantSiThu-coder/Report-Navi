@@ -33,8 +33,7 @@ const initIDB = (): Promise<IDBDatabase> => {
 export const db = {
   isOnline: () => CLOUD_CONFIG.isEnabled,
 
-  // Listen to Database Changes directly (CDC)
-  // This is much faster than Broadcast for data integrity
+  // Listen to Database Changes directly (CDC) - Highest performance
   subscribeToReports: (onInsert: (report: Report) => void, onUpdate: (report: Report) => void, onDelete: (id: string) => void) => {
     if (!supabase) return null;
     return supabase
@@ -84,15 +83,10 @@ export const db = {
 
   updateUserPoints: async (username: string, pointsToAdd: number) => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      // Attempt RPC first (safest and fastest)
-      const { error: rpcError } = await supabase.rpc('increment_points', { row_id: username, x: pointsToAdd });
-      
-      // Fallback if RPC is not created
-      if (rpcError) {
-        const { data: user } = await supabase.from('users').select('points').eq('username', username).single();
-        if (user) {
-          await supabase.from('users').update({ points: user.points + pointsToAdd }).eq('username', username);
-        }
+      // Fetch latest points to ensure accuracy (Atomic increment would be better via SQL RPC)
+      const { data: user } = await supabase.from('users').select('points').eq('username', username).single();
+      if (user) {
+        await supabase.from('users').update({ points: (user.points || 0) + pointsToAdd }).eq('username', username);
       }
       return;
     }

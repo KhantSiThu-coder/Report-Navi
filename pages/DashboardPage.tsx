@@ -18,6 +18,26 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
   useEffect(() => {
     refreshReports();
+
+    // Direct Database Listeners - High Performance
+    const channel = db.subscribeToReports(
+      (newReport) => {
+        setReports(prev => [newReport, ...prev]);
+      },
+      (updatedReport) => {
+        setReports(prev => prev.map(r => r.id === updatedReport.id ? updatedReport : r));
+        // Also update modal if open
+        setSelectedReport(prev => prev?.id === updatedReport.id ? updatedReport : prev);
+      },
+      (deletedId) => {
+        setReports(prev => prev.filter(r => r.id !== deletedId));
+        setSelectedReport(prev => prev?.id === deletedId ? null : prev);
+      }
+    );
+
+    return () => {
+      channel?.unsubscribe();
+    };
   }, []);
 
   const refreshReports = async () => {
@@ -47,12 +67,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     try {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return dateStr;
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const hours = String(d.getHours()).padStart(2, '0');
-      const minutes = String(d.getMinutes()).padStart(2, '0');
-      return `${year}-${month}-${day} ${hours}:${minutes}`;
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch (e) {
       return dateStr;
     }
@@ -62,7 +77,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     try {
       const reportToDelete = reports.find(r => r.id === reportId);
       if (reportToDelete) {
-        // Log the deletion action before removing the report
         await db.addActivity({
           id: Date.now().toString() + Math.random(),
           username: user.username,
@@ -73,18 +87,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         });
       }
 
-      // 1. UI First: Close modal and remove from list immediately
       setSelectedReport(null);
       setIsConfirmingDelete(false);
+      // Local removal is handled by the subscription listener, 
+      // but we do it here too for maximum "snappiness"
       setReports(prev => prev.filter(r => r.id !== reportId));
       
-      // 2. Then perform the background deletion
       await db.deleteReport(reportId);
-      console.log("Deleted report successfully:", reportId);
     } catch (err) {
       console.error("Delete failed:", err);
-      alert("Error: Could not delete report. Please try again.");
-      // Rollback UI state if DB operation fails
+      alert("Error: Could not delete report.");
       refreshReports();
     }
   };
@@ -105,7 +117,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
           <p className="text-gray-500 dark:text-gray-400 font-medium">{t('realTimeMonitor')}</p>
         </div>
         
-        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl w-fit">
+        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl w-fit border border-gray-200 dark:border-gray-700 shadow-inner">
           <button 
             type="button"
             onClick={() => setFilter('all')}
@@ -144,13 +156,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         {isLoading ? (
            <div className="flex flex-col items-center justify-center py-20 gap-4">
               <div className="w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
-              <p className="font-bold text-gray-500">Loading infrastructure data...</p>
+              <p className="font-black text-gray-400 uppercase tracking-widest text-[10px] animate-pulse">Synchronizing Data Node...</p>
            </div>
         ) : filteredReports.length === 0 ? (
-          <div className="text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
-            <div className="text-gray-400 text-5xl mb-4"><i className="fa-solid fa-clipboard-list"></i></div>
-            <h3 className="text-xl font-bold mb-2">{t('noReportsFound')}</h3>
-            <p className="text-gray-500 dark:text-gray-400">{t('beFirstReport')}</p>
+          <div className="text-center py-24 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+            <div className="text-gray-200 dark:text-gray-700 text-6xl mb-6"><i className="fa-solid fa-clipboard-list"></i></div>
+            <h3 className="text-xl font-black mb-2">{t('noReportsFound')}</h3>
+            <p className="text-gray-500 dark:text-gray-400 font-bold">{t('beFirstReport')}</p>
           </div>
         ) : (
           filteredReports.map(report => (
@@ -162,10 +174,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
               }}
               className="group bg-white dark:bg-gray-800 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 transition-all cursor-pointer flex flex-col sm:flex-row gap-6 items-center"
             >
-              <div className="relative w-full sm:w-48 h-32 overflow-hidden rounded-2xl">
-                <img src={report.thumbnail || 'https://picsum.photos/300/200?random=' + report.id} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="Report" />
+              <div className="relative w-full sm:w-48 h-32 overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-900">
+                <img src={report.thumbnail || 'https://picsum.photos/300/200?random=' + report.id} className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-500" alt="Report" />
                 <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
-                  <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg backdrop-blur-md shadow-lg ${
+                  <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg backdrop-blur-md shadow-lg border border-white/20 ${
                     report.status === ReportStatus.PENDING ? 'bg-amber-500/90 text-white' :
                     report.status === ReportStatus.VERIFIED ? 'bg-blue-500/90 text-white' :
                     report.status === ReportStatus.RESOLVED ? 'bg-green-500/90 text-white' :
@@ -173,23 +185,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                   }`}>
                     {report.status}
                   </span>
-                  {report.files && report.files.length > 1 && (
-                    <span className="bg-black/50 text-white text-[9px] px-1.5 py-0.5 rounded-md backdrop-blur-sm font-bold">
-                      <i className="fa-solid fa-images mr-1"></i> {report.files.length}
-                    </span>
-                  )}
                 </div>
               </div>
               
               <div className="flex-grow text-center sm:text-left">
-                <div className="text-xs font-bold text-primary-600 uppercase tracking-widest mb-1">{t(report.category.toLowerCase() as any) || report.category}</div>
+                <div className="text-xs font-black text-primary-600 uppercase tracking-widest mb-1">{t(report.category.toLowerCase() as any) || report.category}</div>
                 <h3 className="text-xl font-black mb-2">{report.title}</h3>
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-sm text-gray-500 dark:text-gray-400">
-                  <span className="flex items-center gap-1.5 overflow-hidden text-ellipsis max-w-[200px] whitespace-nowrap">
-                    <i className="fa-solid fa-location-dot text-primary-500"></i> {report.location}
-                  </span>
-                  <span className="flex items-center gap-1.5"><i className="fa-solid fa-calendar text-gray-400"></i> {formatDate(report.date)}</span>
-                  <span className="flex items-center gap-1.5 font-semibold text-gray-700 dark:text-gray-300"><i className="fa-solid fa-user text-gray-400"></i> {report.user}</span>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  <span className="flex items-center gap-1.5"><i className="fa-solid fa-location-dot"></i> {report.location.substring(0, 30)}...</span>
+                  <span className="flex items-center gap-1.5"><i className="fa-solid fa-calendar"></i> {formatDate(report.date)}</span>
+                  <span className="flex items-center gap-1.5 text-primary-600"><i className="fa-solid fa-user"></i> {report.user}</span>
                 </div>
               </div>
 
@@ -209,7 +214,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             className="absolute inset-0 bg-black/70 backdrop-blur-md animate-in fade-in duration-300"
             onClick={() => setSelectedReport(null)}
           ></div>
-          <div className="bg-white dark:bg-gray-800 w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden flex flex-col animate-in zoom-in duration-300" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-gray-800 w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden flex flex-col animate-in zoom-in duration-300 border border-gray-100 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 p-6 sm:p-8 flex items-center justify-between border-b border-gray-100 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md z-20">
               <div>
                 <span className="bg-primary-600 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg mb-2 inline-block text-white">
@@ -242,7 +247,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                         e.stopPropagation();
                         setIsConfirmingDelete(true);
                       }}
-                      className="p-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-2xl transition-all shadow-sm active:scale-95 flex items-center gap-2 font-bold group"
+                      className="p-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-2xl transition-all shadow-sm active:scale-95 flex items-center gap-2 font-black group"
                     >
                       <i className="fa-solid fa-trash-can transition-transform group-hover:rotate-12"></i>
                       <span className="hidden sm:inline">{t('deleteReport')}</span>
@@ -280,7 +285,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                   ) : (
                     <div className="bg-gray-50 dark:bg-gray-900 rounded-3xl p-10 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
                       <i className="fa-solid fa-image text-4xl mb-3"></i>
-                      <p className="font-bold">No Media Available</p>
+                      <p className="font-black">No Media Available</p>
                     </div>
                   )}
                 </div>
@@ -292,7 +297,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                       <h4 className="font-black text-gray-400 uppercase tracking-widest text-xs mb-3 flex items-center gap-2">
                         <i className="fa-solid fa-align-left"></i> {t('description')}
                       </h4>
-                      <p className="text-gray-600 dark:text-gray-300 leading-relaxed font-medium text-lg">
+                      <p className="text-gray-600 dark:text-gray-300 leading-relaxed font-bold text-lg">
                         {selectedReport.description}
                       </p>
                     </div>
@@ -320,7 +325,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                  </div>
 
                  <div className="space-y-4">
-                    <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-3xl flex justify-between items-center">
+                    <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-3xl flex justify-between items-center border border-gray-100 dark:border-gray-700">
                       <div>
                         <div className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">{t('status')}</div>
                         <div className={`font-black text-xl ${
@@ -332,7 +337,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                       <i className="fa-solid fa-circle-notch text-3xl opacity-20"></i>
                     </div>
                     
-                    <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-3xl">
+                    <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-700">
                       <div className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">{t('date')}</div>
                       <div className="font-black text-xl">{formatDate(selectedReport.date)}</div>
                     </div>

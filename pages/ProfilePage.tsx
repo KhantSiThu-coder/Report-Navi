@@ -17,7 +17,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
   const [userReports, setUserReports] = useState<Report[]>([]);
   const [activities, setActivities] = useState<UserActivity[]>([]);
   
-  // Password Management State
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     current: '',
@@ -29,22 +28,34 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [allReports, allActivities] = await Promise.all([
-          db.getReports(),
-          db.getActivities(user.username)
-        ]);
-        
-        const filteredReports = allReports.filter(r => r.user === user.username);
-        setUserReports(filteredReports);
-        setActivities(allActivities);
-      } catch (err) {
-        console.error("Failed to fetch profile data", err);
-      }
-    };
     fetchData();
+
+    // Listen for points updates in real-time
+    const channel = db.subscribeToPoints(user.username, (newPoints) => {
+      onUpdateUser({ ...user, points: newPoints });
+      // Re-fetch activities to show the new verification log
+      fetchData();
+    });
+
+    return () => {
+      channel?.unsubscribe();
+    };
   }, [user.username]);
+
+  const fetchData = async () => {
+    try {
+      const [allReports, allActivities] = await Promise.all([
+        db.getReports(),
+        db.getActivities(user.username)
+      ]);
+      
+      const filteredReports = allReports.filter(r => r.user === user.username);
+      setUserReports(filteredReports);
+      setActivities(allActivities);
+    } catch (err) {
+      console.error("Failed to fetch profile data", err);
+    }
+  };
 
   const handleProfilePicUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -78,7 +89,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
 
     setIsPasswordLoading(true);
     try {
-      // Verify current password
       const currentHashed = await hashPassword(passwordForm.current, user.username);
       if (currentHashed !== user.passwordHash) {
         setPasswordError(t('incorrectPassword'));
@@ -86,17 +96,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
         return;
       }
 
-      // Hash and update
       const newHashed = await hashPassword(passwordForm.new, user.username);
       const updatedUser = { ...user, passwordHash: newHashed };
       
       onUpdateUser(updatedUser);
       setPasswordSuccess(t('passwordUpdateSuccess'));
-      
-      // Clear form
       setPasswordForm({ current: '', new: '', confirm: '' });
       
-      // Close modal after delay
       setTimeout(() => {
         setIsChangingPassword(false);
         setPasswordSuccess('');
@@ -114,12 +120,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
     try {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return dateStr;
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const hours = String(d.getHours()).padStart(2, '0');
-      const minutes = String(d.getMinutes()).padStart(2, '0');
-      return `${year}-${month}-${day} ${hours}:${minutes}`;
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch (e) {
       return dateStr;
     }
@@ -148,7 +149,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
             <div className="h-32 bg-primary-600 relative">
                <div className="absolute -bottom-12 left-1/2 -translate-x-1/2">
                 <div className="relative group">
@@ -177,9 +178,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
             </div>
             
             <div className="pt-16 pb-8 px-6 text-center">
-              {isUpdating && <p className="text-primary-600 text-xs font-bold mb-2 animate-pulse">{t('updatingProfile')}</p>}
+              {isUpdating && <p className="text-primary-600 text-xs font-black mb-2 animate-pulse">{t('updatingProfile')}</p>}
               <h2 className="text-2xl font-black">{user.username}</h2>
-              <p className="text-gray-500 dark:text-gray-400 font-bold text-sm uppercase tracking-widest mb-4">
+              <p className="text-gray-500 dark:text-gray-400 font-bold text-xs uppercase tracking-[0.2em] mb-4">
                 {user.role} • {t('memberSince')} {user.memberSince}
               </p>
               
@@ -189,15 +190,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-2xl">
+                <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-inner">
                   <div className="text-2xl font-black">{userReports.length}</div>
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('reports')}</div>
+                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('reports')}</div>
                 </div>
-                <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-2xl">
+                <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-inner">
                   <div className="text-2xl font-black">
                     {userReports.filter(r => r.status === ReportStatus.VERIFIED || r.status === ReportStatus.RESOLVED).length}
                   </div>
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('impact')}</div>
+                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('impact')}</div>
                 </div>
               </div>
             </div>
@@ -205,31 +206,34 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
         </div>
 
         <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
+          <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 p-8">
             <h3 className="text-xl font-black mb-6 flex items-center gap-3">
               <i className="fa-solid fa-clock-rotate-left text-primary-500"></i>
               {t('activityHistory')}
             </h3>
             
-            <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+            <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
               {activities.length === 0 ? (
-                <p className="text-gray-500 py-4 text-center font-bold">{t('noActivity')}</p>
+                <div className="text-center py-10 text-gray-400">
+                  <i className="fa-solid fa-hourglass-start text-4xl mb-3 opacity-20"></i>
+                  <p className="font-bold">{t('noActivity')}</p>
+                </div>
               ) : (
                 activities.map((act) => {
                   const config = getActivityConfig(act.type);
                   return (
-                    <div key={act.id} className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl transition-all hover:bg-gray-100 dark:hover:bg-gray-700/50">
-                      <div className={`w-10 h-10 ${config.bg} rounded-xl flex items-center justify-center ${config.color} shadow-sm border border-gray-100 dark:border-gray-700`}>
-                        <i className={`fa-solid ${config.icon}`}></i>
+                    <div key={act.id} className="flex items-center gap-4 p-5 bg-gray-50 dark:bg-gray-900 rounded-3xl transition-all hover:bg-white dark:hover:bg-gray-700 border border-transparent hover:border-gray-100 dark:hover:border-gray-600 shadow-sm hover:shadow-md">
+                      <div className={`w-12 h-12 ${config.bg} rounded-2xl flex items-center justify-center ${config.color} shadow-sm border border-gray-100 dark:border-gray-700`}>
+                        <i className={`fa-solid ${config.icon} text-lg`}></i>
                       </div>
                       <div className="flex-grow min-w-0">
-                        <div className="font-black text-sm truncate">{config.label}: {act.targetTitle}</div>
-                        <div className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">
+                        <div className="font-black text-sm truncate uppercase tracking-tight">{config.label}: {act.targetTitle}</div>
+                        <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
                           {formatDate(act.date)}
                         </div>
                       </div>
                       {act.pointsChange > 0 && (
-                        <div className="text-xs font-black px-2.5 py-1 rounded-lg text-green-600 bg-green-50 dark:bg-green-900/20">
+                        <div className="text-xs font-black px-3 py-1.5 rounded-xl text-green-600 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/30">
                           +{act.pointsChange} {t('points')}
                         </div>
                       )}
@@ -240,7 +244,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
+          <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 p-8">
             <h3 className="text-xl font-black mb-6 flex items-center gap-3">
               <i className="fa-solid fa-gear text-primary-500"></i>
               {t('securitySettings')}
@@ -248,13 +252,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
             <div className="grid md:grid-cols-2 gap-6">
               <button 
                 onClick={() => setIsChangingPassword(true)}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors group text-left border border-transparent hover:border-primary-100"
+                className="flex items-center justify-between p-5 bg-gray-50 dark:bg-gray-900 rounded-[1.5rem] hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors group text-left border border-transparent hover:border-primary-100"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 group-hover:text-primary-600 transition-colors">
-                    <i className="fa-solid fa-key"></i>
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 group-hover:text-primary-600 transition-colors">
+                    <i className="fa-solid fa-key text-lg"></i>
                   </div>
-                  <span className="font-bold">{t('changePassword')}</span>
+                  <span className="font-black uppercase tracking-widest text-xs">{t('changePassword')}</span>
                 </div>
                 <i className="fa-solid fa-chevron-right text-gray-300 group-hover:text-primary-500 transition-colors"></i>
               </button>
@@ -272,21 +276,21 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
               if (!isPasswordLoading) setIsChangingPassword(false);
             }}
           ></div>
-          <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in duration-300">
-            <div className="bg-primary-600 p-6 text-white text-center">
-              <h3 className="text-2xl font-black">{t('changePassword')}</h3>
+          <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in duration-300 border border-gray-100 dark:border-gray-700">
+            <div className="bg-primary-600 p-8 text-white text-center">
+              <h3 className="text-2xl font-black uppercase tracking-widest">{t('changePassword')}</h3>
             </div>
             
-            <form onSubmit={handlePasswordChange} className="p-8 space-y-4">
+            <form onSubmit={handlePasswordChange} className="p-10 space-y-6">
               {passwordError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-xl text-xs font-bold border border-red-100 dark:border-red-900/30 flex items-center gap-2 animate-in shake duration-300">
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-red-100 dark:border-red-900/30 flex items-center gap-2 animate-in shake duration-300">
                   <i className="fa-solid fa-triangle-exclamation"></i>
                   {passwordError}
                 </div>
               )}
               
               {passwordSuccess && (
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 rounded-xl text-xs font-bold border border-green-100 dark:border-green-900/30 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 text-green-600 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-green-100 dark:border-green-900/30 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
                   <i className="fa-solid fa-circle-check"></i>
                   {passwordSuccess}
                 </div>
@@ -299,7 +303,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
                   required
                   value={passwordForm.current}
                   onChange={(e) => setPasswordForm(prev => ({ ...prev, current: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none font-bold transition-all"
+                  className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none font-black transition-all"
                 />
               </div>
 
@@ -310,7 +314,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
                   required
                   value={passwordForm.new}
                   onChange={(e) => setPasswordForm(prev => ({ ...prev, new: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none font-bold transition-all"
+                  className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none font-black transition-all"
                 />
               </div>
 
@@ -321,26 +325,26 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
                   required
                   value={passwordForm.confirm}
                   onChange={(e) => setPasswordForm(prev => ({ ...prev, confirm: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none font-bold transition-all"
+                  className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-transparent focus:border-primary-500 outline-none font-black transition-all"
                 />
               </div>
 
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-4 pt-4">
                 <button 
                   type="button"
                   onClick={() => setIsChangingPassword(false)}
                   disabled={isPasswordLoading}
-                  className="flex-1 px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 font-black text-xs uppercase tracking-widest transition-all active:scale-95"
+                  className="flex-1 px-6 py-4 rounded-2xl bg-gray-100 dark:bg-gray-700 font-black text-[10px] uppercase tracking-widest transition-all active:scale-95"
                 >
                   {t('cancel')}
                 </button>
                 <button 
                   type="submit"
                   disabled={isPasswordLoading}
-                  className="flex-1 px-4 py-3 rounded-xl bg-primary-600 text-white font-black text-xs uppercase tracking-widest shadow-lg shadow-primary-500/30 transition-all active:scale-95 flex items-center justify-center"
+                  className="flex-1 px-6 py-4 rounded-2xl bg-primary-600 text-white font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary-500/30 transition-all active:scale-95 flex items-center justify-center"
                 >
                   {isPasswordLoading ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   ) : (
                     t('updatePassword')
                   )}

@@ -1,5 +1,5 @@
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 import { User, Report, UserActivity } from '../types';
 
 const CLOUD_CONFIG = {
@@ -11,12 +11,6 @@ const CLOUD_CONFIG = {
 const supabase = CLOUD_CONFIG.isEnabled 
   ? createClient(CLOUD_CONFIG.URL, CLOUD_CONFIG.KEY) 
   : null;
-
-// Initialize a Broadcast Channel for sub-100ms UI synchronization
-const syncChannel = supabase ? supabase.channel('app_realtime_sync') : null;
-if (syncChannel) {
-  syncChannel.subscribe();
-}
 
 const USERS_KEY = 'crp_users_v1';
 const DB_NAME = 'ReportNaviDB';
@@ -39,35 +33,38 @@ const initIDB = (): Promise<IDBDatabase> => {
 export const db = {
   isOnline: () => CLOUD_CONFIG.isEnabled,
 
-  // Direct broadcast to all connected clients for instant sync
-  broadcast: (event: string, payload: any) => {
-    if (syncChannel) {
-      syncChannel.send({
-        type: 'broadcast',
-        event: event,
-        payload
-      });
-    }
+  // Listen to Database Changes directly (CDC)
+  // This is much faster than Broadcast for data integrity
+  subscribeToReports: (onInsert: (report: Report) => void, onUpdate: (report: Report) => void, onDelete: (id: string) => void) => {
+    if (!supabase) return null;
+    return supabase
+      .channel('reports-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports' }, payload => onInsert(payload.new as Report))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'reports' }, payload => onUpdate(payload.new as Report))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'reports' }, payload => onDelete(payload.old.id))
+      .subscribe();
   },
 
-  // Listen for broadcast events
-  onSync: (event: string, callback: (payload: any) => void) => {
-    if (!syncChannel) return null;
-    return syncChannel.on('broadcast', { event }, ({ payload }) => {
-      callback(payload);
-    });
+  subscribeToPoints: (username: string, onUpdate: (newPoints: number) => void) => {
+    if (!supabase) return null;
+    return supabase
+      .channel(`user-points-${username}`)
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'users', 
+        filter: `username=eq.${username}` 
+      }, payload => {
+        onUpdate(payload.new.points);
+      })
+      .subscribe();
   },
 
   // USER MANAGEMENT
   getUsers: async (): Promise<User[]> => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      try {
-        const { data, error } = await supabase.from('users').select('*');
-        if (error) throw error;
-        return data || [];
-      } catch (error) {
-        console.error("Cloud fetch error:", error);
-      }
+      const { data, error } = await supabase.from('users').select('*');
+      if (!error) return data || [];
     }
     const data = localStorage.getItem(USERS_KEY);
     return data ? JSON.parse(data) : [];
@@ -75,9 +72,7 @@ export const db = {
 
   saveUser: async (user: User) => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      const { error } = await supabase.from('users').upsert(user, { onConflict: 'username' });
-      if (error) console.error("Cloud save error:", error);
-      db.broadcast('user_updated', { username: user.username });
+      await supabase.from('users').upsert(user, { onConflict: 'username' });
       return;
     }
     const users = await db.getUsers();
@@ -87,16 +82,18 @@ export const db = {
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
   },
 
-  // NEW: Optimized Point Incrementor
-  // This performs a direct database update instead of a full fetch-modify-save cycle.
   updateUserPoints: async (username: string, pointsToAdd: number) => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      // Direct atomic update using PostgreSQL math
-      const { data: user } = await supabase.from('users').select('points').eq('username', username).single();
-      if (user) {
-        await supabase.from('users').update({ points: user.points + pointsToAdd }).eq('username', username);
+      // Attempt RPC first (safest and fastest)
+      const { error: rpcError } = await supabase.rpc('increment_points', { row_id: username, x: pointsToAdd });
+      
+      // Fallback if RPC is not created
+      if (rpcError) {
+        const { data: user } = await supabase.from('users').select('points').eq('username', username).single();
+        if (user) {
+          await supabase.from('users').update({ points: user.points + pointsToAdd }).eq('username', username);
+        }
       }
-      db.broadcast('points_updated', { username, pointsToAdd });
       return;
     }
     const users = await db.getUsers();
@@ -110,13 +107,8 @@ export const db = {
   // REPORTS
   getReports: async (): Promise<Report[]> => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      try {
-        const { data, error } = await supabase.from('reports').select('*').order('date', { ascending: false });
-        if (error) throw error;
-        return data || [];
-      } catch (error) {
-        console.error("Cloud fetch reports error:", error);
-      }
+      const { data, error } = await supabase.from('reports').select('*').order('date', { ascending: false });
+      if (!error) return data || [];
     }
     const idb = await initIDB();
     return new Promise((resolve) => {
@@ -132,25 +124,20 @@ export const db = {
 
   saveReport: async (report: Report): Promise<void> => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      const { error } = await supabase.from('reports').insert(report);
-      if (error) console.error("Cloud insert report error:", error);
-      db.broadcast('new_report', report);
+      await supabase.from('reports').insert(report);
       return;
     }
     const idb = await initIDB();
     return new Promise((resolve) => {
       const transaction = idb.transaction(STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      store.put(report);
+      transaction.objectStore(STORE_NAME).put(report);
       transaction.oncomplete = () => resolve();
     });
   },
 
   updateReport: async (reportId: string, updates: Partial<Report>): Promise<void> => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      const { error } = await supabase.from('reports').update(updates).eq('id', reportId);
-      if (error) console.error("Cloud update report error:", error);
-      db.broadcast('report_updated', { id: reportId, updates });
+      await supabase.from('reports').update(updates).eq('id', reportId);
       return;
     }
     const idb = await initIDB();
@@ -168,9 +155,7 @@ export const db = {
 
   deleteReport: async (reportId: string): Promise<void> => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      const { error } = await supabase.from('reports').delete().eq('id', reportId);
-      if (error) console.error("Cloud delete report error:", error);
-      db.broadcast('report_deleted', { id: reportId });
+      await supabase.from('reports').delete().eq('id', reportId);
       return;
     }
     const idb = await initIDB();
@@ -184,13 +169,8 @@ export const db = {
   // ACTIVITY LOGS
   getActivities: async (username: string): Promise<UserActivity[]> => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      try {
-        const { data, error } = await supabase.from('activities').select('*').eq('username', username).order('date', { ascending: false });
-        if (error) throw error;
-        return data || [];
-      } catch (error) {
-        console.error("Cloud fetch activities error:", error);
-      }
+      const { data, error } = await supabase.from('activities').select('*').eq('username', username).order('date', { ascending: false });
+      if (!error) return data || [];
     }
     const idb = await initIDB();
     return new Promise((resolve) => {
@@ -205,9 +185,7 @@ export const db = {
 
   addActivity: async (activity: UserActivity): Promise<void> => {
     if (CLOUD_CONFIG.isEnabled && supabase) {
-      const { error } = await supabase.from('activities').insert(activity);
-      if (error) console.error("Cloud insert activity error:", error);
-      db.broadcast('new_activity', activity);
+      await supabase.from('activities').insert(activity);
       return;
     }
     const idb = await initIDB();

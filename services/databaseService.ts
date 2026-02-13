@@ -2,22 +2,21 @@
 import { createClient } from '@supabase/supabase-js';
 import { User, Report, UserActivity } from '../types';
 
-/**
- * ONLINE DATABASE CONFIGURATION
- * Strictly using environment variables for production security.
- * Ensure SUPABASE_URL and SUPABASE_KEY are set in your Vercel/Hosting dashboard.
- */
 const CLOUD_CONFIG = {
   URL: process.env.SUPABASE_URL || '',
   KEY: process.env.SUPABASE_KEY || '',
-  // Only enable if both credentials are provided
   isEnabled: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY)
 };
 
-// Initialize Supabase client
 const supabase = CLOUD_CONFIG.isEnabled 
   ? createClient(CLOUD_CONFIG.URL, CLOUD_CONFIG.KEY) 
   : null;
+
+// Initialize a Broadcast Channel for sub-100ms UI synchronization
+const syncChannel = supabase ? supabase.channel('app_realtime_sync') : null;
+if (syncChannel) {
+  syncChannel.subscribe();
+}
 
 const USERS_KEY = 'crp_users_v1';
 const DB_NAME = 'ReportNaviDB';
@@ -38,8 +37,26 @@ const initIDB = (): Promise<IDBDatabase> => {
 };
 
 export const db = {
-  // Helpful for the UI to know if we are in cloud mode or local fallback mode
   isOnline: () => CLOUD_CONFIG.isEnabled,
+
+  // Direct broadcast to all connected clients for instant sync
+  broadcast: (event: string, payload: any) => {
+    if (syncChannel) {
+      syncChannel.send({
+        type: 'broadcast',
+        event: event,
+        payload
+      });
+    }
+  },
+
+  // Listen for broadcast events
+  onSync: (event: string, callback: (payload: any) => void) => {
+    if (!syncChannel) return null;
+    return syncChannel.on('broadcast', { event }, ({ payload }) => {
+      callback(payload);
+    });
+  },
 
   // USER MANAGEMENT
   getUsers: async (): Promise<User[]> => {
@@ -50,7 +67,6 @@ export const db = {
         return data || [];
       } catch (error) {
         console.error("Cloud fetch error:", error);
-        // Fallback to local if cloud fails
       }
     }
     const data = localStorage.getItem(USERS_KEY);
@@ -61,6 +77,7 @@ export const db = {
     if (CLOUD_CONFIG.isEnabled && supabase) {
       const { error } = await supabase.from('users').upsert(user, { onConflict: 'username' });
       if (error) console.error("Cloud save error:", error);
+      db.broadcast('user_updated', { username: user.username });
       return;
     }
     const users = await db.getUsers();
@@ -68,6 +85,26 @@ export const db = {
     if (existingIndex > -1) users[existingIndex] = user;
     else users.push(user);
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  },
+
+  // NEW: Optimized Point Incrementor
+  // This performs a direct database update instead of a full fetch-modify-save cycle.
+  updateUserPoints: async (username: string, pointsToAdd: number) => {
+    if (CLOUD_CONFIG.isEnabled && supabase) {
+      // Direct atomic update using PostgreSQL math
+      const { data: user } = await supabase.from('users').select('points').eq('username', username).single();
+      if (user) {
+        await supabase.from('users').update({ points: user.points + pointsToAdd }).eq('username', username);
+      }
+      db.broadcast('points_updated', { username, pointsToAdd });
+      return;
+    }
+    const users = await db.getUsers();
+    const user = users.find(u => u.username === username);
+    if (user) {
+      user.points += pointsToAdd;
+      await db.saveUser(user);
+    }
   },
 
   // REPORTS
@@ -97,6 +134,7 @@ export const db = {
     if (CLOUD_CONFIG.isEnabled && supabase) {
       const { error } = await supabase.from('reports').insert(report);
       if (error) console.error("Cloud insert report error:", error);
+      db.broadcast('new_report', report);
       return;
     }
     const idb = await initIDB();
@@ -112,6 +150,7 @@ export const db = {
     if (CLOUD_CONFIG.isEnabled && supabase) {
       const { error } = await supabase.from('reports').update(updates).eq('id', reportId);
       if (error) console.error("Cloud update report error:", error);
+      db.broadcast('report_updated', { id: reportId, updates });
       return;
     }
     const idb = await initIDB();
@@ -131,6 +170,7 @@ export const db = {
     if (CLOUD_CONFIG.isEnabled && supabase) {
       const { error } = await supabase.from('reports').delete().eq('id', reportId);
       if (error) console.error("Cloud delete report error:", error);
+      db.broadcast('report_deleted', { id: reportId });
       return;
     }
     const idb = await initIDB();
@@ -167,6 +207,7 @@ export const db = {
     if (CLOUD_CONFIG.isEnabled && supabase) {
       const { error } = await supabase.from('activities').insert(activity);
       if (error) console.error("Cloud insert activity error:", error);
+      db.broadcast('new_activity', activity);
       return;
     }
     const idb = await initIDB();

@@ -23,6 +23,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
 
   useEffect(() => {
     fetchData();
+
+    // Listen for broadcasted updates from other sessions to keep UI in sync without refresh
+    db.onSync('report_updated', () => fetchData());
+    db.onSync('new_report', () => fetchData());
+    db.onSync('report_deleted', () => fetchData());
+
+    return () => {};
   }, []);
 
   const fetchData = async () => {
@@ -51,35 +58,44 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
       return;
     }
 
-    await db.updateReport(reportId, { status: newStatus });
-    
-    let pts = 0;
-    if (newStatus === ReportStatus.VERIFIED) {
-      pts = 50;
-      const users = await db.getUsers();
-      const user = users.find(u => u.username === reporterUsername);
-      if (user) {
-        user.points += pts; 
-        await db.saveUser(user);
+    // 1. Optimistic UI: Update state immediately for zero-lag feeling
+    setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: newStatus } : r));
+    setStats(prev => ({
+      ...prev,
+      pending: prev.pending - (newStatus !== ReportStatus.PENDING && report.status === ReportStatus.PENDING ? 1 : 0),
+      verified: prev.verified + (newStatus === ReportStatus.VERIFIED ? 1 : 0)
+    }));
+
+    // 2. Background processing
+    try {
+      await db.updateReport(reportId, { status: newStatus });
+      
+      let pts = 0;
+      if (newStatus === ReportStatus.VERIFIED) {
+        pts = 50;
+        // Optimized direct point update
+        await db.updateUserPoints(reporterUsername, pts);
       }
+
+      let type: 'verify' | 'resolve' | 'decline' = 'verify';
+      if (newStatus === ReportStatus.RESOLVED) type = 'resolve';
+      if (newStatus === ReportStatus.DECLINED) type = 'decline';
+
+      await db.addActivity({
+        id: Date.now().toString() + Math.random(),
+        username: reporterUsername,
+        type: type,
+        targetTitle: report.title,
+        pointsChange: pts,
+        date: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error("Update failed:", err);
+      fetchData(); // Revert to source-of-truth on error
     }
 
-    let type: 'verify' | 'resolve' | 'decline' = 'verify';
-    if (newStatus === ReportStatus.RESOLVED) type = 'resolve';
-    if (newStatus === ReportStatus.DECLINED) type = 'decline';
-
-    await db.addActivity({
-      id: Date.now().toString() + Math.random(),
-      username: reporterUsername,
-      type: type,
-      targetTitle: report.title,
-      pointsChange: pts,
-      date: new Date().toISOString()
-    });
-
     setConfirmingAction(null);
-    setSelectedReport(null); // Close modal if open
-    fetchData();
+    setSelectedReport(null);
   };
 
   const formatDate = (dateStr: string) => {
@@ -112,7 +128,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
           db.isOnline() ? 'bg-green-50 text-green-600 border-green-100' : 'bg-amber-50 text-amber-600 border-amber-100'
         }`}>
           <div className={`w-2 h-2 rounded-full animate-pulse ${db.isOnline() ? 'bg-green-500' : 'bg-amber-500'}`}></div>
-          {db.isOnline() ? 'CLOUD DATABASE CONNECTED' : 'LOCAL STORAGE MODE'}
+          {db.isOnline() ? 'CLOUD BROADCAST ACTIVE' : 'LOCAL STORAGE MODE'}
         </div>
       </div>
 
@@ -129,7 +145,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ currentUser }) => {
 
       <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700">
         <div className="overflow-x-auto">
-          {isLoading ? (
+          {isLoading && reports.length === 0 ? (
              <div className="p-20 text-center font-bold text-gray-400">{t('loadingSystem')}</div>
           ) : (
             <table className="w-full text-left">

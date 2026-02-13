@@ -41,6 +41,23 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Real-time points subscription for the logged-in user
+  useEffect(() => {
+    if (authState.isAuthenticated && authState.user) {
+      const channel = db.subscribeToPoints(authState.user.username, (newPoints) => {
+        setAuthState(prev => {
+          if (!prev.user) return prev;
+          const updatedUser = { ...prev.user, points: newPoints };
+          sessionStorage.setItem('active_user', JSON.stringify(updatedUser));
+          return { ...prev, user: updatedUser };
+        });
+      });
+      return () => {
+        channel?.unsubscribe();
+      };
+    }
+  }, [authState.isAuthenticated, authState.user?.username]);
+
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
